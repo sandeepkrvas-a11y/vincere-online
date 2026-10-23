@@ -1,0 +1,96 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>VINCERE Online Test</title>
+</head>
+<body>
+  <h1>VINCERE Dashboard</h1>
+  <p id="status">Connecting to Supabase...</p>
+
+  <form id="loginForm">
+    <input id="email" type="email"
+      placeholder="Email" required>
+    <input id="password" type="password"
+      placeholder="Password" required>
+    <button type="submit">Login</button>
+  </form>
+
+  <button id="logoutBtn" hidden>Logout</button>
+  <pre id="result"></pre>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="./supabase-config.js"></script>
+  <script>
+    const statusEl = document.getElementById('status');
+    const resultEl = document.getElementById('result');
+    const loginForm = document.getElementById('loginForm');
+    const logoutBtn = document.getElementById('logoutBtn');
+
+    async function refreshSession() {
+      const { data, error } = await sb.auth.getSession();
+
+      if (error) {
+        statusEl.textContent = 'Session error: ' + error.message;
+        return;
+      }
+
+      const session = data.session;
+      statusEl.textContent = session
+        ? 'Connected and logged in: ' + session.user.email
+        : 'Supabase connected. Please log in.';
+
+      loginForm.hidden = !!session;
+      logoutBtn.hidden = !session;
+
+      if (session) {
+        const { data: profile, error: profileError } =
+          await sb.from('profiles')
+            .select('full_name, role, team')
+            .eq('id', session.user.id)
+            .maybeSingle();
+
+        resultEl.textContent = profileError
+          ? 'Profile error: ' + profileError.message
+          : JSON.stringify(profile, null, 2);
+      } else {
+        resultEl.textContent = '';
+      }
+    }
+
+    loginForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      statusEl.textContent = 'Logging in...';
+
+      const { error } = await sb.auth.signInWithPassword({
+        email: document.getElementById('email').value,
+        password: document.getElementById('password').value
+      });
+
+      if (error) {
+        statusEl.textContent = 'Login failed: ' + error.message;
+        return;
+      }
+
+      await refreshSession();
+    });
+
+    logoutBtn.addEventListener('click', async () => {
+      const { error } = await sb.auth.signOut();
+      if (error) {
+        statusEl.textContent = 'Logout failed: ' + error.message;
+        return;
+      }
+      await refreshSession();
+    });
+
+    sb.auth.onAuthStateChange(() => {
+      setTimeout(refreshSession, 0);
+    });
+
+    refreshSession();
+  </script>
+</body>
+</html>
